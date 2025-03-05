@@ -3,122 +3,100 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Proctoring System</title>
-    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/face-api.js/1.3.0/face-api.min.js"></script>
+    <title>Face Detection & Tab Switch Prevention</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <style>
-        body { text-align: center; font-family: Arial, sans-serif; }
-        video { width: 50%; border: 2px solid black; }
-        #status { font-size: 18px; font-weight: bold; color: red; }
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 20px;
+        }
+        #video {
+            width: 50%;
+            border: 2px solid black;
+        }
+        #status {
+            font-size: 18px;
+            font-weight: bold;
+            color: red;
+            margin-top: 10px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin-top: 20px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
-    <h1>AI Proctoring System</h1>
-    <video id="video" autoplay muted></video>
+
+    <h2>Face Detection & Tab Switch Prevention</h2>
+    <video id="video" autoplay></video>
     <p id="status">Initializing...</p>
-    
+    <button onclick="startExam()">Start Exam</button>
+
     <script>
+        let video = document.getElementById('video');
+        let statusMessage = document.getElementById('status');
         let isSinglePerson = false;
 
+        // 📷 Start Webcam for Face Detection
         async function startCamera() {
-            const video = document.getElementById('video');
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: true });
                 video.srcObject = stream;
-                await loadFaceAPI();
+                video.play();
+                detectFaces();
             } catch (error) {
-                alert('Camera access is required!');
+                console.error('Error accessing webcam:', error);
+                statusMessage.innerText = 'Error accessing webcam!';
+                alert('Camera access is required for the exam!');
                 window.location.href = 'about:blank';
             }
         }
 
-        async function loadFaceAPI() {
-            await faceapi.nets.tinyFaceDetector.loadFromUri('https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights');
-            detectFaces();
-        }
-
+        // 🔎 Detect Face Presence
         async function detectFaces() {
-            const video = document.getElementById('video');
+            const model = await blazeface.load();
             setInterval(async () => {
-                const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
-                if (detections.length === 1) {
-                    document.getElementById('status').innerText = '✅ One person detected. Exam can proceed.';
+                const predictions = await model.estimateFaces(video, false);
+
+                if (predictions.length === 1) {
+                    statusMessage.innerText = '✅ One person detected. Exam can proceed.';
+                    statusMessage.style.color = 'green';
                     isSinglePerson = true;
                 } else {
-                    document.getElementById('status').innerText = '❌ Multiple people detected or no one present!';
+                    statusMessage.innerText = '❌ Error: Multiple people detected or no one present!';
+                    statusMessage.style.color = 'red';
                     isSinglePerson = false;
-                    alert('Only one person should be visible!');
+                    alert('Please ensure only one person is visible on the screen.');
                 }
             }, 2000);
         }
 
-        function preventTabSwitch() {
-            document.addEventListener('visibilitychange', function () {
-                if (document.hidden) {
-                    alert('Tab switching is not allowed!');
-                    window.location.href = 'about:blank';
-                }
-            });
+        // ▶ Start Exam After Verification
+        function startExam() {
+            if (!isSinglePerson) {
+                alert('You cannot start the exam until only one person is detected.');
+                return;
+            }
+            alert('Exam Started!');
         }
 
-        function blockDevTools() {
-            setInterval(() => {
-                if (window.outerWidth - window.innerWidth > 160 || window.outerHeight - window.innerHeight > 160) {
-                    alert('Developer tools detected! Closing the exam.');
-                    window.location.href = 'about:blank';
-                }
-            }, 1000);
-        }
+        // 🔒 Prevent Tab Switching
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                alert('Tab switching is not allowed!');
+                window.location.href = 'about:blank';
+            }
+        });
 
-        function disableShortcuts() {
-            document.addEventListener('keydown', (event) => {
-                if (event.key === 'F12' || (event.ctrlKey && ['c', 'v', 'x', 'u', 'p'].includes(event.key.toLowerCase()))) {
-                    event.preventDefault();
-                    alert('This action is disabled!');
-                }
-            });
-        }
-
-        function preventCopyPaste() {
-            document.addEventListener('copy', (event) => { event.preventDefault(); alert('Copying is disabled!'); });
-            document.addEventListener('paste', (event) => { event.preventDefault(); alert('Pasting is disabled!'); });
-            document.addEventListener('cut', (event) => { event.preventDefault(); alert('Cutting is disabled!'); });
-        }
-
-        function preventBackNavigation() {
-            history.pushState(null, '', location.href);
-            window.onpopstate = () => {
-                history.pushState(null, '', location.href);
-                alert('Back navigation is blocked!');
-            };
-        }
-
-        function detectScreenshot() {
-            document.addEventListener('keydown', (event) => {
-                if (event.key === 'PrintScreen' || (event.ctrlKey && event.key.toLowerCase() === 'p')) {
-                    event.preventDefault();
-                    alert('Screenshots are not allowed!');
-                }
-            });
-        }
-
-        function detectScreenRecording() {
-            navigator.mediaDevices.enumerateDevices().then((devices) => {
-                const videoInputs = devices.filter(device => device.kind === 'videoinput');
-                if (videoInputs.length > 1) {
-                    alert('Screen recording detected! Action blocked.');
-                    window.location.href = 'about:blank';
-                }
-            });
-        }
-
+        // Start Camera on Page Load
         startCamera();
-        preventTabSwitch();
-        blockDevTools();
-        disableShortcuts();
-        preventCopyPaste();
-        preventBackNavigation();
-        detectScreenshot();
-        detectScreenRecording();
     </script>
+
 </body>
 </html>
+
